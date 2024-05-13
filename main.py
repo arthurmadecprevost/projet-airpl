@@ -4,8 +4,8 @@ import requests
 import csv
 
 # Define the start and end dates
-start_date = "2024-01-01"
-end_date = "2024-05-13"
+start_date = "2023-01-01"
+end_date = "2024-01-01"
 
 # Convert the dates to datetime objects
 start_datetime = datetime.datetime.strptime(start_date, "%Y-%m-%d")
