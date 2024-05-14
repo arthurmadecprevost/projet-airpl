@@ -34,7 +34,6 @@ while current_datetime <= end_datetime:
         if response.status_code == 200:
             data = response.content
             
-           
             year_path = f"data/{year_folder}"
             month_path = f"data/{year_folder}/{month_folder}"
             os.makedirs(year_path, exist_ok=True)
