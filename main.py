@@ -83,5 +83,5 @@ def process():
 # Define the start and end dates
 start_date = "2022-12-15"
 end_date = "2024-01-01"
-#download(start_date, end_date)
+download(start_date, end_date)
 process()
