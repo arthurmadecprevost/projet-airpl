@@ -54,7 +54,34 @@ def download(start_date, end_date):
         # Move to the next day
         current_datetime += datetime.timedelta(days=1)
 
+def process():
+    # Define the path to the result file
+    result_file = "result.csv"
+    # Open the result file in write mode
+    with open(result_file, "w", newline="") as result_csv:
+        # Create a CSV writer object for the result file
+        result_writer = csv.writer(result_csv)
+        # Iterate over each file in the data directory
+        for root, dirs, files in os.walk("data"):
+            for file in files:
+                # Check if the file is a CSV file
+                if file.endswith(".csv"):
+                    # Define the path to the current file
+                    file_path = os.path.join(root, file)
+                    # Open the current file in read mode
+                    with open(file_path, "r") as csv_file:
+                        # Create a CSV reader object for the current file
+                        csv_reader = csv.reader(csv_file)
+                        # Skip the header line
+                        next(csv_reader)
+                        # Read the first data line
+                        first_data_line = next(csv_reader)
+                        # Write the first data line to the result file
+                        result_writer.writerow(first_data_line)
+    print("First data lines have been successfully stored in the result file:", result_file)
+
 # Define the start and end dates
 start_date = "2022-12-15"
 end_date = "2024-01-01"
-download(start_date, end_date)
+#download(start_date, end_date)
+process()
