@@ -112,11 +112,11 @@ def generate_graphs():
         ax.set_ylabel("Pollution Value")
         
         # Avant de sauvegarder le graphique
-        if not os.path.exists('graphiques'):
-            os.makedirs('graphiques')
+        if not os.path.exists('result/graphiques'):
+            os.makedirs('result/graphiques')
 
         # Save the graph to a file in the graphiques folder
-        graph_file = f"graphiques/{station_code}_{pollutant}_{date}.png"
+        graph_file = f"result/graphiques/{station_code}_{pollutant}_{date}.png"
         plt.savefig(graph_file)
         
         # Close the figure to free up memory
