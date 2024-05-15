@@ -2,6 +2,8 @@ import datetime
 import os
 import requests
 import csv
+import pandas as pd
+import matplotlib.pyplot as plt
 
 def download(start_date, end_date):
 
@@ -48,7 +50,7 @@ def download(start_date, end_date):
                     csv_writer.writerow(line.split(","))
                 print("Data has been successfully stored in the CSV file:", csv_file)
             else:
-                print("Erreur lors de la récupération des données pour la date", current_date, ":", response.status_code)
+                print("Error while downloading for date", current_date, ":", response.status_code)
         else:
             print("File already exists for date", current_date, "- Skipping download")
         # Move to the next day
@@ -72,16 +74,61 @@ def process():
                     with open(file_path, "r") as csv_file:
                         # Create a CSV reader object for the current file
                         csv_reader = csv.reader(csv_file)
-                        # Skip the header line
-                        next(csv_reader)
-                        # Read the first data line
-                        first_data_line = next(csv_reader)
-                        # Write the first data line to the result file
-                        result_writer.writerow(first_data_line)
+                        header = next(csv_reader)
+                        # Write the header to the result file
+                        result_writer.writerow(header)
+                        # Iterate over each row in the CSV file
+                        for row in csv_reader:
+                            if (row[0].__contains__(";NO2;") or row[0].__contains__(";PM10;")):
+                                # Write the row to the result file
+                                result_writer.writerow(row)
     print("First data lines have been successfully stored in the result file:", result_file)
 
+def generate_graphs():
+    # Read the result file into a pandas DataFrame
+    result_df = pd.read_csv("result.csv", sep=";")
+    result_df.info()
+    
+    # Group the data by station, pollutant, and date
+    grouped_df = result_df.groupby(["code_station (ue)", "nom_poll", "date_fin"])
+    
+    # Iterate over each group
+    for group_name, group_data in grouped_df:
+        # Extract the station code, pollutant, and date from the group name
+        station_code, pollutant, date = group_name
+        
+        # Create a new figure and axis for the graph
+        fig, ax = plt.subplots()
+        
+        # Plot the values of pollution (field valeur) by hour
+        group_data["valeur"] = pd.to_numeric(group_data["valeur"], errors="coerce")
+        group_data.plot(x="date_debut", y="valeur", ax=ax)
+        
+        # Set the title of the graph
+        ax.set_title(f"Station: {station_code}, Pollutant: {pollutant}, Date: {date}")
+        
+        # Set the labels for the x and y axes
+        ax.set_xlabel("date_debut")
+        ax.set_ylabel("Pollution Value")
+        
+        # Avant de sauvegarder le graphique
+        if not os.path.exists('graphiques'):
+            os.makedirs('graphiques')
+
+        # Save the graph to a file in the graphiques folder
+        graph_file = f"graphiques/{station_code}_{pollutant}_{date}.png"
+        plt.savefig(graph_file)
+        
+        # Close the figure to free up memory
+        plt.close(fig)
+        
+        print("Graph has been successfully generated:", graph_file)
+
+
+
 # Define the start and end dates
-start_date = "2022-12-15"
-end_date = "2024-01-01"
+start_date = "2024-01-01"
+end_date = "2024-01-15"
 download(start_date, end_date)
 process()
+generate_graphs()
