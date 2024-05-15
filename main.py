@@ -44,7 +44,7 @@ def download(start_date, end_date):
                 # Split the data into lines
                 lines = data_str.splitlines()
                 # Create a CSV writer object
-                csv_writer = csv.writer(open(csv_file, "w", newline=""))
+                csv_writer = csv.writer(open(csv_file, "w", newline="", encoding='utf-8'))
                 # Write the lines to the CSV file
                 for line in lines:
                     csv_writer.writerow(line.split(","))
@@ -60,7 +60,7 @@ def process():
     # Define the path to the result file
     result_file = "result.csv"
     # Open the result file in write mode
-    with open(result_file, "w", newline="") as result_csv:
+    with open(result_file, "w", newline="", encoding='utf-8') as result_csv:
         # Create a CSV writer object for the result file
         result_writer = csv.writer(result_csv)
         # Iterate over each file in the data directory
