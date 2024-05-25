@@ -59,6 +59,43 @@ def download(start_date, end_date):
 def process():
     # Define the path to the result file
     result_file = "result.csv"
+    
+    # Create an empty DataFrame to store the result
+    result_df = pd.DataFrame()
+    
+    # Iterate over each file in the data directory
+    for root, dirs, files in os.walk("data"):
+        for file in files:
+            # Check if the file is a CSV file
+            if file.endswith(".csv"):
+                # Define the path to the current file
+                file_path = os.path.join(root, file)
+                
+                # Read the CSV file into a DataFrame
+                csv_df = pd.read_csv(file_path, sep=";")
+
+                # Convert the date_debut and date_fin columns to datetime objects
+                csv_df["date_debut"] = pd.to_datetime(csv_df["date_debut"])
+                csv_df["date_fin"] = pd.to_datetime(csv_df["date_fin"])
+
+                # Split the date_debut and date_fin into date and heure
+                csv_df[['date_debut', 'heure_debut']] = csv_df['date_debut'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
+                csv_df[['date_fin', 'heure_fin']] = csv_df['date_fin'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
+
+                # Filter the rows where nom_poll is equal to "NO2" or "PM10" and statut_valid is True
+                filtered_df = csv_df[(csv_df["nom_poll"].isin(["NO2", "PM10"])) & (csv_df["statut_valid"] == True)]
+
+                # Append the filtered DataFrame to the result DataFrame
+                result_df = pd.concat([result_df, filtered_df])
+    
+    # Write the result DataFrame to the result file
+    result_df.to_csv(result_file, index=False, sep=";")
+    
+    print("First data lines have been successfully stored in the result file:", result_file)
+
+def process2():
+    # Define the path to the result file
+    result_file = "result.csv"
     # Open the result file in write mode
     with open(result_file, "w", newline="", encoding='utf-8') as result_csv:
         # Create a CSV writer object for the result file
@@ -82,41 +119,57 @@ def process():
                             if (row[0].__contains__(";NO2;") or row[0].__contains__(";PM10;")):
                                 # Write the row to the result file
                                 result_writer.writerow(row)
-    print("First data lines have been successfully stored in the result file:", result_file)
 
-def generate_graphs():
     # Read the result file into a pandas DataFrame
     result_df = pd.read_csv("result.csv", sep=";")
-    result_df.info()
+
+    # Split the date_debut and date_fin into date and heure
+    result_df[['date_debut', 'heure_debut']] = result_df['date_debut'].str.split(' ', expand=True)
+    result_df[['date_fin', 'heure_fin']] = result_df['date_fin'].str.split(' ', expand=True)
+
+    # Define the path to the result2 file
+    result2_file = "result2.csv"
+
+    # Write the modified DataFrame to the result2 file
+    result_df.to_csv(result2_file, index=False, sep=";")
+
+    print("Data has been successfully stored in the result2 file:", result2_file)
     
-    # Group the data by station, pollutant, and date
-    grouped_df = result_df.groupby(["code_station (ue)", "nom_poll", "date_fin"])
+    print("First data lines have been successfully stored in the result file:", result_file)
+
+def graph_date():
+    # Read the result2 file into a pandas DataFrame
+    result2_df = pd.read_csv("result2.csv", sep=";")
+    
+    # Group the data by date_debut, code_station, and nom_poll
+    grouped_df = result2_df.groupby(["date_debut", "code_station (ue)", "nom_poll"])
     
     # Iterate over each group
     for group_name, group_data in grouped_df:
-        # Extract the station code, pollutant, and date from the group name
-        station_code, pollutant, date = group_name
+        # Extract the date_debut, code_station, and nom_poll from the group name
+        date_debut, code_station, nom_poll = group_name
         
         # Create a new figure and axis for the graph
         fig, ax = plt.subplots()
         
         # Plot the values of pollution (field valeur) by hour
+        group_data["heure_debut"] = pd.to_datetime(group_data["heure_debut"])
         group_data["valeur"] = pd.to_numeric(group_data["valeur"], errors="coerce")
-        group_data.plot(x="date_debut", y="valeur", ax=ax)
+        group_data.plot(x="heure_debut", y="valeur", ax=ax)
         
         # Set the title of the graph
-        ax.set_title(f"Station: {station_code}, Pollutant: {pollutant}, Date: {date}")
+        ax.set_title(f"Station: {code_station}, Pollutant: {nom_poll}, Date: {date_debut}")
         
         # Set the labels for the x and y axes
-        ax.set_xlabel("date_debut")
+        ax.set_xlabel("Hour")
         ax.set_ylabel("Pollution Value")
         
-        # Avant de sauvegarder le graphique
-        if not os.path.exists('result/graphiques'):
-            os.makedirs('result/graphiques')
-
+        # Create the graphiques folder if it doesn't exist
+        if not os.path.exists('graphiques'):
+            os.makedirs('graphiques')
+        
         # Save the graph to a file in the graphiques folder
-        graph_file = f"result/graphiques/{station_code}_{pollutant}_{date}.png"
+        graph_file = f"graphiques/{code_station}_{nom_poll}_{date_debut}.png"
         plt.savefig(graph_file)
         
         # Close the figure to free up memory
@@ -124,11 +177,10 @@ def generate_graphs():
         
         print("Graph has been successfully generated:", graph_file)
 
-
-
 # Define the start and end dates
 start_date = "2024-01-01"
 end_date = "2024-01-15"
 download(start_date, end_date)
 process()
-generate_graphs()
+#generate_graphs()
+graph_date()
