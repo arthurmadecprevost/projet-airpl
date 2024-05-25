@@ -163,6 +163,33 @@ def sector_chart_emissions(df):
         )
     )
 
+def plot_daily_average_emissions(df):
+    # Convertir les colonnes de date et d'heure en datetime en inférant automatiquement le format
+    df['datetime_debut'] = pd.to_datetime(df['datetime_debut'])
+    df['datetime_fin'] = pd.to_datetime(df['datetime_fin'], infer_datetime_format=True)
+
+    # Group by hour and calculate the mean emissions for each hour
+    daily_avg_emissions = df.groupby(df['datetime_debut'].dt.hour)['valeur'].mean()
+
+    # Plot the daily average emissions
+    st.subheader("Courbe : Moyenne journalière d'émissions de NO2 et de PM10")
+    st.write("Cette courbe montre l'évolution moyenne des émissions de NO2 et de PM10 tout au long d'une journée.")
+
+    st.line_chart(daily_avg_emissions)
+
+def plot_monthly_average_emissions(df):
+    # Convertir les colonnes de date et d'heure en datetime en inférant automatiquement le format
+    df['datetime_debut'] = pd.to_datetime(df['datetime_debut'])
+    df['datetime_fin'] = pd.to_datetime(df['datetime_fin'], infer_datetime_format=True)
+
+    # Group by day and calculate the mean emissions for each day
+    monthly_avg_emissions = df.groupby(df['datetime_debut'].dt.day)['valeur'].mean()
+
+    # Plot the monthly average emissions
+    st.subheader("Courbe : Moyenne mensuelle d'émissions de NO2 et de PM10")
+    st.write("Cette courbe montre l'évolution moyenne des émissions de NO2 et de PM10 pour chaque jour du mois.")
+
+    st.line_chart(monthly_avg_emissions)
 
 def main():
     st.set_page_config(layout="wide")
@@ -266,8 +293,11 @@ def main():
         col1.metric("Minimum", f"{filtered_df['valeur'].min()} {filtered_df['unite'].unique()[0]}", txtMin)
         col2.metric("Moyenne", f"{average_value} {filtered_df['unite'].unique()[0]}", txtMoyenne)
         col3.metric("Maximum", f"{filtered_df['valeur'].max()} {filtered_df['unite'].unique()[0]}", txtMax)
-        sector_chart_emissions(filtered_df)
-        treemap_emissions(filtered_df)
+        sector_chart_emissions(quarter_df if quarter_df.empty else filtered_df)
+        treemap_emissions(quarter_df if quarter_df.empty else filtered_df)
+
+        plot_daily_average_emissions(quarter_df if quarter_df.empty else filtered_df)
+        plot_monthly_average_emissions(quarter_df if quarter_df.empty else filtered_df)
 
         left_column, right_column = st.columns(2)
         # You can use a column just like st.sidebar:
