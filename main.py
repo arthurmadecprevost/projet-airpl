@@ -6,6 +6,9 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+import plotly.express as px
+
 
 def download(start_date, end_date):
 
@@ -123,75 +126,124 @@ def process():
         
         print(f"Data for {group_name} has been successfully stored in the output file:", output_file)
 
-def main():
-    # Download the data
-    #download("2023-01-01", "2024-03-31")
-    #process()
+# Generates a Streamlit treemap for emission by department and city.
+def treemap_emissions(df):
+    df_filtered = df
 
-    # Read the result file into a pandas DataFrame
-    result_df = pd.read_csv("result.csv", sep=";")
- 
-    # Generate the graphs
-    #graph_date()
+    # Group by department, city, and pollutant, sum emissions
+    emissions_by_dept_city_poll = (
+        df_filtered.groupby(["nom_dept", "nom_com"])["valeur"]
+        .sum()
+        .reset_index()
+        .rename(columns={"valeur": "Emission totale"})
+    )
+
+    # Create the treemap with Streamlit
+    st.subheader("Treemap: Emission by Department, City and Pollutant (µg/m³)")
+    st.write("This treemap shows the total emission for each department, city, and pollutant.")
+
+    st.plotly_chart(
+        figure_or_data=px.treemap(
+            emissions_by_dept_city_poll, path=["nom_dept", "nom_com"], values="Emission totale", color="Emission totale"
+        )
+    )
+
+# Generates a Streamlit sector chart for emission by influence.
+def sector_chart_emissions(df):
+    # Filter for NO2 and PM10
+    df_filtered = df[(df["nom_poll"].isin(["NO2", "PM10"])) & (df["statut_valid"] == True)]
+
+    # Count occurrences of each influence
+    influence_counts = df_filtered["influence"].value_counts().reset_index(name="count")
+
+    # Create the sector chart with Streamlit
+    st.subheader("Sector Chart: Emission by Influence")
+    st.write("This sector chart shows the distribution of emissions across different influences.")
+
+    st.plotly_chart(
+        figure_or_data=px.pie(
+            influence_counts, values="count", names="influence", title="Emission Distribution by Influence"
+        )
+    )
+
+
+def main():
     st.set_page_config(layout="wide")
-    st.title('La pollution en Pays de la Loire')
+    st.title("Tableau de bord Pollution de l'air en Pays de la Loire")
     st.write('Visualisation des données de pollution en Pays de la Loire')
     st.write('Les données sont issues de la plateforme de l\'AIRPL')
     st.write('https://data.airpl.org/')
 
-    # Using "with" notation
-    with st.sidebar:
-        # Get the unique year_quarter values from the result DataFrame
-        unique_year_quarters = result_df["year_quarter"].unique()
-        st.title("Filtres")
-        # Add a radio button to select the year_quarter
-        selected_year_quarter = st.selectbox(
-            "Choisir un semestre",
-            unique_year_quarters
-        )
-        quarter_df = pd.read_csv("results/result_"+selected_year_quarter+".csv", sep=";")
-        unique_department = quarter_df["nom_dept"].unique()
-        selected_department = st.selectbox(
-            "Choisir un département",
-            unique_department,
-            None
-        )
-        if not selected_department:
-            unique_cities = quarter_df["nom_com"].unique()
-        else:
-            unique_cities = quarter_df[quarter_df["nom_dept"] == selected_department]["nom_com"].unique()
-        # Add a selectbox to choose a city
-        selected_city = st.selectbox(
-            "Choisir une ville",
-            unique_cities,
-            None
-        )
-        unique_polluant = quarter_df["nom_poll"].unique()
-        selected_polluant = st.selectbox(
-            "Choisir un polluant",
-            unique_polluant
-        )
+    result_file = "result.csv"
+    data_exists = os.path.exists(result_file)
 
-        # Filter the DataFrame based on the selected polluant
-        filtered_df = quarter_df[quarter_df["year_quarter"] == selected_year_quarter]
-        if selected_department:
-            filtered_df = filtered_df[filtered_df["nom_dept"] == selected_department]
-        if selected_city:
-            filtered_df = filtered_df[filtered_df["nom_com"] == selected_city]
-        filtered_df = filtered_df[filtered_df["nom_poll"] == selected_polluant]
+    if not data_exists:
+        if st.button("Télécharger et traiter les données"):
+            with st.status("Téléchargement et traitement des données", expanded=True) as status:
+                st.write("Téléchargement des données..")
+                download("2023-01-01", "2024-03-31")
+                st.write("Traitement des données..")
+                process()
+                status.update(label="Téléchargement et traitement terminé", state="complete", expanded=False)
+            data_exists = os.path.exists(result_file)
+    if data_exists:
+        # Read the result file into a pandas DataFrame
+        result_df = pd.read_csv("result.csv", sep=";")
+        # Using "with" notation
+        with st.sidebar:
+            # Get the unique year_quarter values from the result DataFrame
+            unique_year_quarters = result_df["year_quarter"].unique()
+            st.title("Filtres")
+            # Add a radio button to select the year_quarter
+            selected_year_quarter = st.selectbox(
+                "Choisir un semestre",
+                unique_year_quarters
+            )
+            quarter_df = pd.read_csv("results/result_"+selected_year_quarter+".csv", sep=";")
+            unique_department = quarter_df["nom_dept"].unique()
+            selected_department = st.selectbox(
+                "Choisir un département",
+                unique_department,
+                None
+            )
+            if not selected_department:
+                unique_cities = quarter_df["nom_com"].unique()
+            else:
+                unique_cities = quarter_df[quarter_df["nom_dept"] == selected_department]["nom_com"].unique()
+            # Add a selectbox to choose a city
+            selected_city = st.selectbox(
+                "Choisir une ville",
+                unique_cities,
+                None
+            )
+            unique_polluant = quarter_df["nom_poll"].unique()
+            selected_polluant = st.selectbox(
+                "Choisir un polluant",
+                unique_polluant
+            )
 
-        # Display the filtered DataFrame
-        st.write(filtered_df)
+            # Filter the DataFrame based on the selected polluant
+            filtered_df = quarter_df[quarter_df["year_quarter"] == selected_year_quarter]
+            if selected_department:
+                filtered_df = filtered_df[filtered_df["nom_dept"] == selected_department]
+            if selected_city:
+                filtered_df = filtered_df[filtered_df["nom_com"] == selected_city]
+            filtered_df = filtered_df[filtered_df["nom_poll"] == selected_polluant]
 
-    left_column, right_column = st.columns(2)
-    # You can use a column just like st.sidebar:
-    with left_column:
-        st.map(filtered_df, size=1000, latitude="y_wgs84", longitude="x_wgs84")
+            # Display the filtered DataFrame
+            st.write(filtered_df)
 
-    # Or even better, call Streamlit functions inside a "with" block:
-    with right_column:
-        st.line_chart(filtered_df, x="datetime_debut", y="valeur")
-    # Generate the line chart
+        sector_chart_emissions(filtered_df)
+        treemap_emissions(filtered_df)
+
+        left_column, right_column = st.columns(2)
+        # You can use a column just like st.sidebar:
+        with left_column:
+            st.map(filtered_df, size=1000, latitude="y_wgs84", longitude="x_wgs84")
+
+        # Or even better, call Streamlit functions inside a "with" block:
+        with right_column:
+            st.line_chart(filtered_df, x="datetime_debut", y="valeur")
 
 if __name__ == "__main__":
     main()
