@@ -87,6 +87,14 @@ def process():
                 csv_df[['date_debut', 'heure_debut']] = csv_df['date_debut'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
                 csv_df[['date_fin', 'heure_fin']] = csv_df['date_fin'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
 
+                # Extract the year and quarter from the date_debut column
+                # Extract the year and quarter from the date_debut column
+                csv_df["date_debut"] = pd.to_datetime(csv_df["date_debut"])
+                csv_df["year"] = csv_df["date_debut"].dt.year
+                csv_df["quarter"] = csv_df["date_debut"].dt.quarter
+                # Combine the year and quarter columns into a single column
+                csv_df["year_quarter"] = csv_df["year"].astype(str) + "-" + csv_df["quarter"].astype(str)
+
                 # Drop duplicate rows based on all columns
                 csv_df = csv_df.drop_duplicates()
 
@@ -101,39 +109,90 @@ def process():
     
     print("First data lines have been successfully stored in the result file:", result_file)
 
+    # Group the data by year_quarter
+    grouped_df = result_df.groupby("year_quarter")
+
+    # Iterate over each group
+    for group_name, group_df in grouped_df:
+        # Define the path to the output file for the current group
+        os.makedirs("results/", exist_ok=True)
+        output_file = f"results/result_{group_name}.csv"
+        
+        # Write the group DataFrame to the output file
+        group_df.to_csv(output_file, index=False, sep=";")
+        
+        print(f"Data for {group_name} has been successfully stored in the output file:", output_file)
+
 def main():
     # Download the data
-    download("2023-01-01", "2024-03-31")
+    #download("2023-01-01", "2024-03-31")
+    #process()
 
     # Read the result file into a pandas DataFrame
     result_df = pd.read_csv("result.csv", sep=";")
-
-    process()
-    
+ 
     # Generate the graphs
     #graph_date()
-    st.title('Uber pickups in NYC')
-    st.markdown('This is a Streamlit dashboard that shows Uber pickups in NYC.')
+    st.set_page_config(layout="wide")
+    st.title('La pollution en Pays de la Loire')
+    st.write('Visualisation des données de pollution en Pays de la Loire')
+    st.write('Les données sont issues de la plateforme de l\'AIRPL')
+    st.write('https://data.airpl.org/')
 
     # Using "with" notation
     with st.sidebar:
-        add_radio = st.radio(
-            "Choose a shipping method",
-            ("Standard (5-15 days)", "Express (2-5 days)")
+        # Get the unique year_quarter values from the result DataFrame
+        unique_year_quarters = result_df["year_quarter"].unique()
+        st.title("Filtres")
+        # Add a radio button to select the year_quarter
+        selected_year_quarter = st.selectbox(
+            "Choisir un semestre",
+            unique_year_quarters
+        )
+        quarter_df = pd.read_csv("results/result_"+selected_year_quarter+".csv", sep=";")
+        unique_department = quarter_df["nom_dept"].unique()
+        selected_department = st.selectbox(
+            "Choisir un département",
+            unique_department,
+            None
+        )
+        if not selected_department:
+            unique_cities = quarter_df["nom_com"].unique()
+        else:
+            unique_cities = quarter_df[quarter_df["nom_dept"] == selected_department]["nom_com"].unique()
+        # Add a selectbox to choose a city
+        selected_city = st.selectbox(
+            "Choisir une ville",
+            unique_cities,
+            None
+        )
+        unique_polluant = quarter_df["nom_poll"].unique()
+        selected_polluant = st.selectbox(
+            "Choisir un polluant",
+            unique_polluant
         )
 
-    map_data = pd.read_csv("result.csv", sep=";")
-    
-    # Get the unique dates from the date_debut column
-    available_dates = result_df["date_debut"].unique()
-    # Convert the dates to datetime objects
-    available_dates = pd.to_datetime(available_dates)
-    # Set the minimum and maximum dates
-    d = st.date_input("Date", min_value=available_dates.min().date(), max_value=available_dates.max().date(), value=available_dates.min().date())
+        # Filter the DataFrame based on the selected polluant
+        filtered_df = quarter_df[quarter_df["year_quarter"] == selected_year_quarter]
+        if selected_department:
+            filtered_df = filtered_df[filtered_df["nom_dept"] == selected_department]
+        if selected_city:
+            filtered_df = filtered_df[filtered_df["nom_com"] == selected_city]
+        filtered_df = filtered_df[filtered_df["nom_poll"] == selected_polluant]
 
-    t = st.time_input("Heure", datetime.time(), step=3600)
+        # Display the filtered DataFrame
+        st.write(filtered_df)
 
-    st.map(map_data, size=1000, latitude="y_wgs84", longitude="x_wgs84")
+    left_column, right_column = st.columns(2)
+    # You can use a column just like st.sidebar:
+    with left_column:
+        st.map(filtered_df, size=1000, latitude="y_wgs84", longitude="x_wgs84")
+
+    # Or even better, call Streamlit functions inside a "with" block:
+    with right_column:
+        st.line_chart(filtered_df, x="datetime_debut", y="valeur")
+    # Generate the line chart
 
 if __name__ == "__main__":
     main()
+    #process()
