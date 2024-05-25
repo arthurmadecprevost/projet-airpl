@@ -91,15 +91,11 @@ def process():
                 csv_df[['date_fin', 'heure_fin']] = csv_df['date_fin'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
 
                 # Extract the year and quarter from the date_debut column
-                # Extract the year and quarter from the date_debut column
                 csv_df["date_debut"] = pd.to_datetime(csv_df["date_debut"])
                 csv_df["year"] = csv_df["date_debut"].dt.year
                 csv_df["quarter"] = csv_df["date_debut"].dt.quarter
                 # Combine the year and quarter columns into a single column
                 csv_df["year_quarter"] = csv_df["year"].astype(str) + "-" + csv_df["quarter"].astype(str)
-
-                # Drop duplicate rows based on all columns
-                csv_df = csv_df.drop_duplicates()
 
                 # Filter the rows where nom_poll is equal to "NO2" or "PM10" and statut_valid is True
                 filtered_df = csv_df[(csv_df["nom_poll"].isin(["NO2", "PM10"])) & (csv_df["statut_valid"] == True)]
@@ -127,6 +123,7 @@ def process():
         print(f"Data for {group_name} has been successfully stored in the output file:", output_file)
 
 # Generates a Streamlit treemap for emission by department and city.
+
 def treemap_emissions(df):
     df_filtered = df
 
@@ -196,7 +193,7 @@ def main():
             st.title("Filtres")
             # Add a radio button to select the year_quarter
             selected_year_quarter = st.selectbox(
-                "Choisir un semestre",
+                "Choisir un trimestre",
                 unique_year_quarters
             )
             quarter_df = pd.read_csv("results/result_"+selected_year_quarter+".csv", sep=";")
@@ -210,6 +207,7 @@ def main():
                 unique_cities = quarter_df["nom_com"].unique()
             else:
                 unique_cities = quarter_df[quarter_df["nom_dept"] == selected_department]["nom_com"].unique()
+
             # Add a selectbox to choose a city
             selected_city = st.selectbox(
                 "Choisir une ville",
@@ -233,6 +231,41 @@ def main():
             # Display the filtered DataFrame
             st.write(filtered_df)
 
+            # Calculate the previous quarter
+            previous_quarter = selected_year_quarter.split("-")
+            previous_quarter[1] = str(int(previous_quarter[1]) - 1)
+            if previous_quarter[1] == "0":
+                previous_quarter[0] = str(int(previous_quarter[0]) - 1)
+                previous_quarter[1] = "4"
+            previous_quarter = "-".join(previous_quarter)
+
+            if previous_quarter in unique_year_quarters:
+                st.write("Trimestre précédent:", previous_quarter)
+            else:
+                previous_quarter = None
+                st.write("Trimestre précédent non disponible")
+
+        # Calculate the average of the values in filtered_df
+        average_value = filtered_df["valeur"].mean().round(2)
+
+        # Display the average value
+        col1, col2, col3 = st.columns(3)
+        if previous_quarter:
+            previous_quarter_df = pd.read_csv("results/result_"+previous_quarter+".csv", sep=";")
+            previous_quarter_df = previous_quarter_df[previous_quarter_df["nom_poll"] == selected_polluant]
+            previous_average_value = previous_quarter_df["valeur"].mean().round(2)
+            txtMoyenne = f"{(average_value - previous_average_value).round(2)} {filtered_df['unite'].unique()[0]}"
+            previous_min = previous_quarter_df["valeur"].min()
+            txtMin = f"{(filtered_df['valeur'].min() - previous_min).round(2)} {filtered_df['unite'].unique()[0]}"
+            previous_max = previous_quarter_df["valeur"].max()
+            txtMax = f"{(filtered_df['valeur'].max() - previous_max).round(2)} {filtered_df['unite'].unique()[0]}"
+        else:
+            txtMoyenne = None
+            txtMin = None
+            txtMax = None
+        col1.metric("Minimum", f"{filtered_df['valeur'].min()} {filtered_df['unite'].unique()[0]}", txtMin)
+        col2.metric("Moyenne", f"{average_value} {filtered_df['unite'].unique()[0]}", txtMoyenne)
+        col3.metric("Maximum", f"{filtered_df['valeur'].max()} {filtered_df['unite'].unique()[0]}", txtMax)
         sector_chart_emissions(filtered_df)
         treemap_emissions(filtered_df)
 
