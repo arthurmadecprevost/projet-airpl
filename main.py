@@ -3,7 +3,9 @@ import os
 import requests
 import csv
 import pandas as pd
+import streamlit as st
 import matplotlib.pyplot as plt
+import numpy as np
 
 def download(start_date, end_date):
 
@@ -74,6 +76,9 @@ def process():
                 # Read the CSV file into a DataFrame
                 csv_df = pd.read_csv(file_path, sep=";")
 
+                csv_df["datetime_debut"] = pd.to_datetime(csv_df["date_debut"])
+                csv_df["datetime_fin"] = pd.to_datetime(csv_df["date_fin"])
+
                 # Convert the date_debut and date_fin columns to datetime objects
                 csv_df["date_debut"] = pd.to_datetime(csv_df["date_debut"])
                 csv_df["date_fin"] = pd.to_datetime(csv_df["date_fin"])
@@ -81,6 +86,9 @@ def process():
                 # Split the date_debut and date_fin into date and heure
                 csv_df[['date_debut', 'heure_debut']] = csv_df['date_debut'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
                 csv_df[['date_fin', 'heure_fin']] = csv_df['date_fin'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
+
+                # Drop duplicate rows based on all columns
+                csv_df = csv_df.drop_duplicates()
 
                 # Filter the rows where nom_poll is equal to "NO2" or "PM10" and statut_valid is True
                 filtered_df = csv_df[(csv_df["nom_poll"].isin(["NO2", "PM10"])) & (csv_df["statut_valid"] == True)]
@@ -93,94 +101,39 @@ def process():
     
     print("First data lines have been successfully stored in the result file:", result_file)
 
-def process2():
-    # Define the path to the result file
-    result_file = "result.csv"
-    # Open the result file in write mode
-    with open(result_file, "w", newline="", encoding='utf-8') as result_csv:
-        # Create a CSV writer object for the result file
-        result_writer = csv.writer(result_csv)
-        # Iterate over each file in the data directory
-        for root, dirs, files in os.walk("data"):
-            for file in files:
-                # Check if the file is a CSV file
-                if file.endswith(".csv"):
-                    # Define the path to the current file
-                    file_path = os.path.join(root, file)
-                    # Open the current file in read mode
-                    with open(file_path, "r") as csv_file:
-                        # Create a CSV reader object for the current file
-                        csv_reader = csv.reader(csv_file)
-                        header = next(csv_reader)
-                        # Write the header to the result file
-                        result_writer.writerow(header)
-                        # Iterate over each row in the CSV file
-                        for row in csv_reader:
-                            if (row[0].__contains__(";NO2;") or row[0].__contains__(";PM10;")):
-                                # Write the row to the result file
-                                result_writer.writerow(row)
+def main():
+    # Download the data
+    download("2023-01-01", "2024-03-31")
 
     # Read the result file into a pandas DataFrame
     result_df = pd.read_csv("result.csv", sep=";")
 
-    # Split the date_debut and date_fin into date and heure
-    result_df[['date_debut', 'heure_debut']] = result_df['date_debut'].str.split(' ', expand=True)
-    result_df[['date_fin', 'heure_fin']] = result_df['date_fin'].str.split(' ', expand=True)
-
-    # Define the path to the result2 file
-    result2_file = "result2.csv"
-
-    # Write the modified DataFrame to the result2 file
-    result_df.to_csv(result2_file, index=False, sep=";")
-
-    print("Data has been successfully stored in the result2 file:", result2_file)
+    process()
     
-    print("First data lines have been successfully stored in the result file:", result_file)
+    # Generate the graphs
+    #graph_date()
+    st.title('Uber pickups in NYC')
+    st.markdown('This is a Streamlit dashboard that shows Uber pickups in NYC.')
 
-def graph_date():
-    # Read the result2 file into a pandas DataFrame
-    result2_df = pd.read_csv("result2.csv", sep=";")
-    
-    # Group the data by date_debut, code_station, and nom_poll
-    grouped_df = result2_df.groupby(["date_debut", "code_station (ue)", "nom_poll"])
-    
-    # Iterate over each group
-    for group_name, group_data in grouped_df:
-        # Extract the date_debut, code_station, and nom_poll from the group name
-        date_debut, code_station, nom_poll = group_name
-        
-        # Create a new figure and axis for the graph
-        fig, ax = plt.subplots()
-        
-        # Plot the values of pollution (field valeur) by hour
-        group_data["heure_debut"] = pd.to_datetime(group_data["heure_debut"])
-        group_data["valeur"] = pd.to_numeric(group_data["valeur"], errors="coerce")
-        group_data.plot(x="heure_debut", y="valeur", ax=ax)
-        
-        # Set the title of the graph
-        ax.set_title(f"Station: {code_station}, Pollutant: {nom_poll}, Date: {date_debut}")
-        
-        # Set the labels for the x and y axes
-        ax.set_xlabel("Hour")
-        ax.set_ylabel("Pollution Value")
-        
-        # Create the graphiques folder if it doesn't exist
-        if not os.path.exists('graphiques'):
-            os.makedirs('graphiques')
-        
-        # Save the graph to a file in the graphiques folder
-        graph_file = f"graphiques/{code_station}_{nom_poll}_{date_debut}.png"
-        plt.savefig(graph_file)
-        
-        # Close the figure to free up memory
-        plt.close(fig)
-        
-        print("Graph has been successfully generated:", graph_file)
+    # Using "with" notation
+    with st.sidebar:
+        add_radio = st.radio(
+            "Choose a shipping method",
+            ("Standard (5-15 days)", "Express (2-5 days)")
+        )
 
-# Define the start and end dates
-start_date = "2024-01-01"
-end_date = "2024-01-15"
-download(start_date, end_date)
-process()
-#generate_graphs()
-graph_date()
+    map_data = pd.read_csv("result.csv", sep=";")
+    
+    # Get the unique dates from the date_debut column
+    available_dates = result_df["date_debut"].unique()
+    # Convert the dates to datetime objects
+    available_dates = pd.to_datetime(available_dates)
+    # Set the minimum and maximum dates
+    d = st.date_input("Date", min_value=available_dates.min().date(), max_value=available_dates.max().date(), value=available_dates.min().date())
+
+    t = st.time_input("Heure", datetime.time(), step=3600)
+
+    st.map(map_data, size=1000, latitude="y_wgs84", longitude="x_wgs84")
+
+if __name__ == "__main__":
+    main()
