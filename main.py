@@ -61,6 +61,20 @@ def download(start_date, end_date):
         # Move to the next day
         current_datetime += datetime.timedelta(days=1)
 
+def download_sirene_data():
+    # Send a GET request to download the SIRENE data
+    response = requests.get("https://data.paysdelaloire.fr/api/explore/v2.1/catalog/datasets/120027016_base-sirene-v3-ss/exports/csv")
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Define the path to save the downloaded file
+        sirene_file = "data/sirene_data.csv"
+        # Save the response content to the file
+        with open(sirene_file, "wb") as file:
+            file.write(response.content)
+        print("SIRENE Data downloaded successfully")
+    else:
+        print("Failed to download SIRENE data")
+
 def process():
     # Define the path to the result file
     result_file = "result.csv"
@@ -72,10 +86,9 @@ def process():
     for root, dirs, files in os.walk("data"):
         for file in files:
             # Check if the file is a CSV file
-            if file.endswith(".csv"):
+            if file.endswith(".csv") and file.startswith("file_"):
                 # Define the path to the current file
                 file_path = os.path.join(root, file)
-                
                 # Read the CSV file into a DataFrame
                 csv_df = pd.read_csv(file_path, sep=";")
 
@@ -90,6 +103,9 @@ def process():
                 csv_df[['date_debut', 'heure_debut']] = csv_df['date_debut'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
                 csv_df[['date_fin', 'heure_fin']] = csv_df['date_fin'].dt.strftime('%Y-%m-%d %H:%M:%S').str.split(' ', expand=True)
 
+                # Remove rows where the month of datetime_debut and datetime_fin are not the same
+                csv_df = csv_df[csv_df['datetime_debut'].dt.month == csv_df['datetime_fin'].dt.month]
+
                 # Extract the year and quarter from the date_debut column
                 csv_df["date_debut"] = pd.to_datetime(csv_df["date_debut"])
                 csv_df["year"] = csv_df["date_debut"].dt.year
@@ -98,10 +114,13 @@ def process():
                 csv_df["year_quarter"] = csv_df["year"].astype(str) + "-" + csv_df["quarter"].astype(str)
 
                 # Filter the rows where nom_poll is equal to "NO2" or "PM10" and statut_valid is True
-                filtered_df = csv_df[(csv_df["nom_poll"].isin(["NO2", "PM10"])) & (csv_df["statut_valid"] == True)]
+                filtered_df = csv_df[csv_df["nom_poll"].isin(["NO2", "PM10"])]
+                filtered_df = filtered_df[filtered_df["statut_valid"] == True]
+                #filtered_df = csv_df[(csv_df["nom_poll"].isin(["NO2", "PM10"])) & (csv_df["statut_valid"] == True)]
 
                 # Append the filtered DataFrame to the result DataFrame
-                result_df = pd.concat([result_df, filtered_df])
+                result_df = pd.concat([result_df, filtered_df], ignore_index=True)
+                print("Processed file:", file_path, "- Number of lines added:", len(filtered_df))
     
     # Write the result DataFrame to the result file
     result_df.to_csv(result_file, index=False, sep=";")
@@ -121,9 +140,39 @@ def process():
         group_df.to_csv(output_file, index=False, sep=";")
         
         print(f"Data for {group_name} has been successfully stored in the output file:", output_file)
-
+ 
 # Generates a Streamlit treemap for emission by department and city.
 
+def process_sirene_data():
+    # Read the SIRENE data file into a pandas DataFrame
+    sirene_df = pd.read_csv("data/sirene_data.csv", delimiter=";")
+    
+    # Group the data by city and section of establishment, count the occurrences
+    
+    section_counts = sirene_df.groupby(["libellecommuneetablissement", "sectionetablissement"]).size().reset_index(name="count")
+    
+    # Pivot the table to have cities as rows and sections as columns
+    pivot_table = section_counts.pivot(index="libellecommuneetablissement", columns="sectionetablissement", values="count")
+    
+    # Save the pivot table to a new file
+    pivot_table.to_csv("results/section_distribution_by_city.csv")
+    
+    print("Section distribution by city file created successfully")
+
+def plot_section_distribution_by_city():
+    # Read the section distribution by city file into a pandas DataFrame
+    section_df = pd.read_csv("results/section_distribution_by_city.csv")
+    
+    # Filter for Nantes city
+    nantes_df = section_df[section_df["libellecommuneetablissement"] == "NANTES"]
+
+    # Plot the distribution of sections by city
+    st.subheader("Distribution des Sections d'Entreprises à Nantes")
+    st.write("Ce graphique montre la répartition des sections d'entreprises à Nantes.")
+    # Plot the distribution of establishments by city
+    fig = px.bar(nantes_df, x="libellecommuneetablissement", y=nantes_df.columns[1:], title="Distribution des établissements par type à Nantes")
+    st.plotly_chart(fig)
+    
 def treemap_emissions(df):
     df_filtered = df
 
@@ -136,8 +185,8 @@ def treemap_emissions(df):
     )
 
     # Create the treemap with Streamlit
-    st.subheader("Treemap: Emission by Department, City and Pollutant (µg/m³)")
-    st.write("This treemap shows the total emission for each department, city, and pollutant.")
+    st.subheader("Treemap: Émissions par Département, Ville et Polluant (µg/m³)")
+    st.write("Ce treemap montre l'émission totale pour chaque département, ville et polluant.")
 
     st.plotly_chart(
         figure_or_data=px.treemap(
@@ -154,19 +203,19 @@ def sector_chart_emissions(df):
     influence_counts = df_filtered["influence"].value_counts().reset_index(name="count")
 
     # Create the sector chart with Streamlit
-    st.subheader("Sector Chart: Emission by Influence")
-    st.write("This sector chart shows the distribution of emissions across different influences.")
+    st.subheader("Émission par Influence")
+    st.write("Ce graphique montre la répartition des émissions selon différentes influences.")
 
     st.plotly_chart(
         figure_or_data=px.pie(
-            influence_counts, values="count", names="influence", title="Emission Distribution by Influence"
+            influence_counts, values="count", names="influence", title="Distribution des émissions par influence"
         )
     )
 
 def plot_daily_average_emissions(df):
-    # Convertir les colonnes de date et d'heure en datetime en inférant automatiquement le format
+    # Convertir les colonnes de date et d'heure en datetime
     df['datetime_debut'] = pd.to_datetime(df['datetime_debut'])
-    df['datetime_fin'] = pd.to_datetime(df['datetime_fin'], infer_datetime_format=True)
+    df['datetime_fin'] = pd.to_datetime(df['datetime_fin'])
 
     # Group by hour and calculate the mean emissions for each hour
     daily_avg_emissions = df.groupby(df['datetime_debut'].dt.hour)['valeur'].mean()
@@ -178,9 +227,9 @@ def plot_daily_average_emissions(df):
     st.line_chart(daily_avg_emissions)
 
 def plot_monthly_average_emissions(df):
-    # Convertir les colonnes de date et d'heure en datetime en inférant automatiquement le format
+    # Convertir les colonnes de date et d'heure en datetime
     df['datetime_debut'] = pd.to_datetime(df['datetime_debut'])
-    df['datetime_fin'] = pd.to_datetime(df['datetime_fin'], infer_datetime_format=True)
+    df['datetime_fin'] = pd.to_datetime(df['datetime_fin'])
 
     # Group by day and calculate the mean emissions for each day
     monthly_avg_emissions = df.groupby(df['datetime_debut'].dt.day)['valeur'].mean()
@@ -192,11 +241,15 @@ def plot_monthly_average_emissions(df):
     st.line_chart(monthly_avg_emissions)
 
 def main():
-    st.set_page_config(layout="wide")
+    st.set_page_config(
+        page_title="Tableau de bord - AirPL", 
+        page_icon="🔍", 
+        layout="wide"
+    )
     st.title("Tableau de bord Pollution de l'air en Pays de la Loire")
-    st.write('Visualisation des données de pollution en Pays de la Loire')
-    st.write('Les données sont issues de la plateforme de l\'AIRPL')
-    st.write('https://data.airpl.org/')
+    st.caption('Visualisation des données de pollution en Pays de la Loire. Utilisez les filtres dans le menu de gauche pour afficher les données souhaitées.')
+    st.caption('Les données sont issues de la plateforme de l\'AIRPL (https://data.airpl.org/).')
+    st.divider()
 
     result_file = "result.csv"
     data_exists = os.path.exists(result_file)
@@ -205,9 +258,13 @@ def main():
         if st.button("Télécharger et traiter les données"):
             with st.status("Téléchargement et traitement des données", expanded=True) as status:
                 st.write("Téléchargement des données..")
-                download("2023-01-01", "2024-03-31")
+                download("2023-08-01", "2024-03-31")
+                st.write("Téléchargement des données SIRENE..")
+                download_sirene_data()
                 st.write("Traitement des données..")
                 process()
+                st.write("Traitement des données SIRENE..")
+                process_sirene_data()
                 status.update(label="Téléchargement et traitement terminé", state="complete", expanded=False)
             data_exists = os.path.exists(result_file)
     if data_exists:
@@ -218,6 +275,7 @@ def main():
             # Get the unique year_quarter values from the result DataFrame
             unique_year_quarters = result_df["year_quarter"].unique()
             st.title("Filtres")
+            st.divider()
             # Add a radio button to select the year_quarter
             selected_year_quarter = st.selectbox(
                 "Choisir un trimestre",
@@ -254,6 +312,8 @@ def main():
             if selected_city:
                 filtered_df = filtered_df[filtered_df["nom_com"] == selected_city]
             filtered_df = filtered_df[filtered_df["nom_poll"] == selected_polluant]
+
+            st.divider()
 
             # Display the filtered DataFrame
             st.write(filtered_df)
@@ -293,11 +353,15 @@ def main():
         col1.metric("Minimum", f"{filtered_df['valeur'].min()} {filtered_df['unite'].unique()[0]}", txtMin)
         col2.metric("Moyenne", f"{average_value} {filtered_df['unite'].unique()[0]}", txtMoyenne)
         col3.metric("Maximum", f"{filtered_df['valeur'].max()} {filtered_df['unite'].unique()[0]}", txtMax)
+
         sector_chart_emissions(quarter_df if quarter_df.empty else filtered_df)
         treemap_emissions(quarter_df if quarter_df.empty else filtered_df)
 
         plot_daily_average_emissions(quarter_df if quarter_df.empty else filtered_df)
         plot_monthly_average_emissions(quarter_df if quarter_df.empty else filtered_df)
+
+        # Call the function in the main() function
+        plot_section_distribution_by_city()
 
         left_column, right_column = st.columns(2)
         # You can use a column just like st.sidebar:
