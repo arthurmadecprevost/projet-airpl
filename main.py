@@ -81,6 +81,9 @@ def process():
     
     # Create an empty DataFrame to store the result
     result_df = pd.DataFrame()
+
+    # Create an empty DataFrame to store the department by city mapping
+    department_by_city_df = pd.DataFrame()
     
     # Iterate over each file in the data directory
     for root, dirs, files in os.walk("data"):
@@ -121,6 +124,9 @@ def process():
                 # Append the filtered DataFrame to the result DataFrame
                 result_df = pd.concat([result_df, filtered_df], ignore_index=True)
                 print("Processed file:", file_path, "- Number of lines added:", len(filtered_df))
+
+                # Add department by city mapping to the department_by_city DataFrame
+                department_by_city_df = pd.concat([department_by_city_df, csv_df[["nom_com", "nom_dept"]]], ignore_index=True)
     
     # Write the result DataFrame to the result file
     result_df.to_csv(result_file, index=False, sep=";")
@@ -140,6 +146,11 @@ def process():
         group_df.to_csv(output_file, index=False, sep=";")
         
         print(f"Data for {group_name} has been successfully stored in the output file:", output_file)
+    
+    # Write the department by city DataFrame to the department by city file
+    department_by_city_df.drop_duplicates(inplace=True)  # Remove duplicates if any
+    department_by_city_df.to_csv("results/department_by_city.csv", index=False)
+    print("Department by city file created successfully")
  
 # Generates a Streamlit treemap for emission by department and city.
 
@@ -159,18 +170,70 @@ def process_sirene_data():
     
     print("Section distribution by city file created successfully")
 
-def plot_section_distribution_by_city():
+def treemap_section_distribution_by_city(selected_city):
+    # Lire le fichier de distribution des sections par ville dans un DataFrame pandas
+    section_df = pd.read_csv("results/section_distribution_by_city.csv")
+    
+    # Filtrer pour la ville sélectionnée
+    city_df = section_df[section_df["libellecommuneetablissement"] == selected_city.upper()]
+
+    if city_df.empty:
+        st.write(f"Aucune donnée disponible pour {selected_city}.")
+        return
+
+    # Transformer les données en format compatible avec Plotly Express
+    data = []
+    for col in city_df.columns[1:]:
+        count = city_df[col].iloc[0]
+        if count > 0:
+            data.append({"section": col, "count": count})
+
+    # Créer la treemap
+    fig = px.treemap(data, path=["section"], values="count", height=800)
+
+    # Afficher la treemap dans Streamlit
+    st.subheader(f"Distribution des Sections d'Entreprises à {selected_city}")
+    st.write(f"Cette treemap montre la répartition des sections d'entreprises à {selected_city}.")
+    st.plotly_chart(fig)
+
+def get_department(city):
+    # Read the department by city file into a pandas DataFrame
+    department_df = pd.read_csv("results/department_by_city.csv")
+    
+    result = department_df.loc[department_df["nom_com"].str.upper() == city.upper(), "nom_dept"]
+
+    if not result.empty:
+        department = result.iloc[0]
+    else:
+        # Gérer le cas où la série est vide
+        department = None  # ou une autre valeur par défaut
+    
+    return department
+
+def treemap_section_distribution_by_department(selected_department):
     # Read the section distribution by city file into a pandas DataFrame
     section_df = pd.read_csv("results/section_distribution_by_city.csv")
     
-    # Filter for Nantes city
-    nantes_df = section_df[section_df["libellecommuneetablissement"] == "NANTES"]
+    # Filter for the selected department
+    city_df = section_df[section_df["libellecommuneetablissement"].apply(lambda x: get_department(x)) == selected_department]
 
-    # Plot the distribution of sections by city
-    st.subheader("Distribution des Sections d'Entreprises à Nantes")
-    st.write("Ce graphique montre la répartition des sections d'entreprises à Nantes.")
-    # Plot the distribution of establishments by city
-    fig = px.bar(nantes_df, x="libellecommuneetablissement", y=nantes_df.columns[1:], title="Distribution des établissements par type à Nantes")
+    if city_df.empty:
+        st.write(f"Aucune donnée disponible pour le département {selected_department}.")
+        return
+
+    # Transform the data into a format compatible with Plotly Express
+    data = []
+    for col in city_df.columns[1:]:
+        count = city_df[col].sum()  # Sum the counts for all cities in the department
+        if count > 0:
+            data.append({"section": col, "count": count})
+
+    # Create the treemap
+    fig = px.treemap(data, path=["section"], values="count", height=800)
+
+    # Display the treemap in Streamlit
+    st.subheader(f"Distribution des Sections d'Entreprises dans le département {selected_department}")
+    st.write(f"Cette treemap montre la répartition des sections d'entreprises dans le département {selected_department}.")
     st.plotly_chart(fig)
     
 def treemap_emissions(df):
@@ -240,6 +303,21 @@ def plot_monthly_average_emissions(df):
 
     st.line_chart(monthly_avg_emissions)
 
+def global_charts(selected_department, selected_city):
+    if selected_department is not None:
+        if selected_city is not None:
+            st.header(f"Graphiques Globaux pour la ville {selected_city}")
+            st.write("Les graphiques ci-dessous montrent les tendances des émissions sur une longue période pour la ville sélectionnée. (Ne prend pas en compte les filtres de trimestres)")
+            # Appel de la fonction treemap_section_distribution_by_city avec le conteneur pleine largeur
+            with st.container():
+                treemap_section_distribution_by_city(selected_city)
+        else:
+            st.header(f"Graphiques Globaux pour le département {selected_department}")
+            st.write("Les graphiques ci-dessous montrent les tendances des émissions sur une longue période pour la ville sélectionnée. (Ne prend pas en compte les filtres de trimestres)")
+            # Appel de la fonction treemap_section_distribution_by_city avec le conteneur pleine largeur
+            with st.container():
+                treemap_section_distribution_by_department(selected_department)
+
 def main():
     st.set_page_config(
         page_title="Tableau de bord - AirPL", 
@@ -257,14 +335,14 @@ def main():
     if not data_exists:
         if st.button("Télécharger et traiter les données"):
             with st.status("Téléchargement et traitement des données", expanded=True) as status:
-                st.write("Téléchargement des données..")
-                download("2023-08-01", "2024-03-31")
-                st.write("Téléchargement des données SIRENE..")
-                download_sirene_data()
+                # st.write("Téléchargement des données..")
+                # download("2023-08-01", "2024-03-31")
+                # st.write("Téléchargement des données SIRENE..")
+                # download_sirene_data()
                 st.write("Traitement des données..")
                 process()
-                st.write("Traitement des données SIRENE..")
-                process_sirene_data()
+                # st.write("Traitement des données SIRENE..")
+                # process_sirene_data()
                 status.update(label="Téléchargement et traitement terminé", state="complete", expanded=False)
             data_exists = os.path.exists(result_file)
     if data_exists:
@@ -357,20 +435,20 @@ def main():
         sector_chart_emissions(quarter_df if quarter_df.empty else filtered_df)
         treemap_emissions(quarter_df if quarter_df.empty else filtered_df)
 
-        plot_daily_average_emissions(quarter_df if quarter_df.empty else filtered_df)
-        plot_monthly_average_emissions(quarter_df if quarter_df.empty else filtered_df)
-
-        # Call the function in the main() function
-        plot_section_distribution_by_city()
-
         left_column, right_column = st.columns(2)
-        # You can use a column just like st.sidebar:
-        with left_column:
-            st.map(filtered_df, size=1000, latitude="y_wgs84", longitude="x_wgs84")
 
-        # Or even better, call Streamlit functions inside a "with" block:
+        # colonne gauche
+        with left_column:
+            plot_daily_average_emissions(quarter_df if quarter_df.empty else filtered_df)
+
+        # colonne droite
         with right_column:
-            st.line_chart(filtered_df, x="datetime_debut", y="valeur")
+            plot_monthly_average_emissions(quarter_df if quarter_df.empty else filtered_df)
+
+        # toute la largeur du conteneur
+        with st.container():
+            st.map(filtered_df, size=1000, latitude="y_wgs84", longitude="x_wgs84")
+            global_charts(selected_department, selected_city)
 
 if __name__ == "__main__":
     main()
