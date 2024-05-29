@@ -423,7 +423,7 @@ def main():
             # Add a radio button to select the year_quarter
             selected_year_quarter = st.selectbox(
                 "Choisir un trimestre",
-                unique_year_quarters
+                sorted(unique_year_quarters, reverse=True)
             )
             quarter_df = pd.read_csv("results/result_"+selected_year_quarter+".csv", sep=";")
             unique_department = quarter_df["nom_dept"].unique()
