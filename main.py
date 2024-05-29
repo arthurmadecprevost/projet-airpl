@@ -345,6 +345,45 @@ def global_charts(selected_department, selected_city):
         with st.container():
             treemap_section_distribution()  
 
+def check_alerts(df):
+    no2_alert = False
+    pm10_alert = False
+    no2_messages = []
+    pm10_messages = []
+
+    if len(df) > 0:
+        df["datetime_debut"] = pd.to_datetime(df["datetime_debut"])
+        df = df.sort_values(by="datetime_debut")
+
+        for city in df["nom_com"].unique():
+            city_df = df[df["nom_com"] == city]
+            city_df["valeur_NO2_3h"] = city_df[city_df["nom_poll"] == "NO2"]["valeur"].rolling(window=3).mean()
+            city_df["valeur_NO2_24h"] = city_df[city_df["nom_poll"] == "NO2"]["valeur"].rolling(window=24).mean()
+
+            if city_df["valeur_NO2_3h"].max() >= 400:
+                no2_alert = True
+                alert_times = city_df[city_df["valeur_NO2_3h"] >= 400]["datetime_debut"]
+                max_value = city_df["valeur_NO2_3h"].max()
+                time_range = alert_times.dt.strftime("%d/%m/%Y %Hh%M").tolist()
+                no2_messages.append(f"{city} : Dépassement avec une moyenne horaire de {max_value} µg/m³ de {time_range[0]} à {time_range[-1]}")
+
+            if city_df["valeur_NO2_24h"].iloc[-2:].mean() >= 200:
+                no2_alert = True
+                mean_value = city_df["valeur_NO2_24h"].iloc[-2:].mean()
+                no2_messages.append(f"{city} : Dépassement avec une moyenne horaire de {mean_value} µg/m³ à J-1 et à J ({mean_value} µg/m³)")
+
+            city_df["valeur_PM10_24h"] = city_df[city_df["nom_poll"] == "PM10"]["valeur"].rolling(window=24).mean()
+            if city_df["valeur_PM10_24h"].max() >= 80:
+                pm10_alert = True
+                alert_times = city_df[city_df["valeur_PM10_24h"] >= 80]["datetime_debut"]
+                max_value = city_df["valeur_PM10_24h"].max()
+                time_range = alert_times.dt.strftime("%d/%m/%Y %Hh%M").tolist()
+                pm10_messages.append(f"{city} : Dépassement avec une moyenne horaire de {max_value} µg/m³ de {time_range[0]} à {time_range[-1]}")
+
+    return no2_alert, pm10_alert, no2_messages, pm10_messages
+
+
+
 def main():
     st.set_page_config(
         page_title="Tableau de bord - AirPL", 
@@ -458,6 +497,26 @@ def main():
         col1.metric("Minimum", f"{filtered_df['valeur'].min()} {filtered_df['unite'].unique()[0]}", txtMin)
         col2.metric("Moyenne", f"{average_value} {filtered_df['unite'].unique()[0]}", txtMoyenne)
         col3.metric("Maximum", f"{filtered_df['valeur'].max()} {filtered_df['unite'].unique()[0]}", txtMax)
+
+        # Vérification des alertes
+        no2_alert, pm10_alert, no2_messages, pm10_messages = check_alerts(filtered_df)
+
+        # Affichage des alertes dans un tableau Streamlit
+        if no2_alert or pm10_alert:
+            st.subheader("Alertes")
+            alert_data = []
+
+            if no2_alert:
+                for message in no2_messages:
+                    alert_data.append({"Polluant": "NO2", "Message": message})
+            if pm10_alert:
+                for message in pm10_messages:
+                    alert_data.append({"Polluant": "PM10", "Message": message})
+
+            alert_df = pd.DataFrame(alert_data)
+            st.dataframe(alert_df, width=1000)
+        else:
+            st.info("Aucune alerte détectée.")
 
         sector_chart_emissions(quarter_df if quarter_df.empty else filtered_df)
         treemap_emissions(quarter_df if quarter_df.empty else filtered_df)
