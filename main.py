@@ -196,6 +196,29 @@ def treemap_section_distribution_by_city(selected_city):
     st.write(f"Cette treemap montre la répartition des sections d'entreprises à {selected_city}.")
     st.plotly_chart(fig)
 
+def treemap_section_distribution():
+    # Lire le fichier de distribution des sections par ville dans un DataFrame pandas
+    section_df = pd.read_csv("results/section_distribution_by_city.csv")
+    
+    if section_df.empty:
+        st.write(f"Aucune donnée disponible pour la région Pays de la Loire.")
+        return
+
+    # Transformer les données en format compatible avec Plotly Express
+    data = []
+    for col in section_df.columns[1:]:
+        count = section_df[col].iloc[0]
+        if count > 0:
+            data.append({"section": col, "count": count})
+
+    # Créer la treemap
+    fig = px.treemap(data, path=["section"], values="count", height=800)
+
+    # Afficher la treemap dans Streamlit
+    st.subheader(f"Distribution des Sections d'Entreprises dans la région Pays de la Loire")
+    st.write(f"Cette treemap montre la répartition des sections d'entreprises dans la région Pays de la Loire.")
+    st.plotly_chart(fig)
+
 def get_department(city):
     # Read the department by city file into a pandas DataFrame
     department_df = pd.read_csv("results/department_by_city.csv")
@@ -307,16 +330,20 @@ def global_charts(selected_department, selected_city):
     if selected_department is not None:
         if selected_city is not None:
             st.header(f"Graphiques Globaux pour la ville {selected_city}")
-            st.write("Les graphiques ci-dessous montrent les tendances des émissions sur une longue période pour la ville sélectionnée. (Ne prend pas en compte les filtres de trimestres)")
+            st.write("Ces graphiques ne sont pas directement liés aux données de pollution mais permettent une analyse précise des sources d'émissions. (Ne prend pas en compte les filtres de trimestres)")
             # Appel de la fonction treemap_section_distribution_by_city avec le conteneur pleine largeur
             with st.container():
                 treemap_section_distribution_by_city(selected_city)
         else:
             st.header(f"Graphiques Globaux pour le département {selected_department}")
-            st.write("Les graphiques ci-dessous montrent les tendances des émissions sur une longue période pour la ville sélectionnée. (Ne prend pas en compte les filtres de trimestres)")
+            st.write("Ces graphiques ne sont pas directement liés aux données de pollution mais permettent une analyse précise des sources d'émissions. (Ne prend pas en compte les filtres de trimestres)")
             # Appel de la fonction treemap_section_distribution_by_city avec le conteneur pleine largeur
             with st.container():
                 treemap_section_distribution_by_department(selected_department)
+    else:
+        st.header(f"Graphiques Globaux pour la région Pays de la Loire")
+        with st.container():
+            treemap_section_distribution()  
 
 def main():
     st.set_page_config(
@@ -335,14 +362,14 @@ def main():
     if not data_exists:
         if st.button("Télécharger et traiter les données"):
             with st.status("Téléchargement et traitement des données", expanded=True) as status:
-                # st.write("Téléchargement des données..")
-                # download("2023-08-01", "2024-03-31")
-                # st.write("Téléchargement des données SIRENE..")
+                st.write("Téléchargement des données..")
+                download("2021-01-01", "2024-03-31")
+                st.write("Téléchargement des données SIRENE..")
                 # download_sirene_data()
                 st.write("Traitement des données..")
                 process()
                 # st.write("Traitement des données SIRENE..")
-                # process_sirene_data()
+                process_sirene_data()
                 status.update(label="Téléchargement et traitement terminé", state="complete", expanded=False)
             data_exists = os.path.exists(result_file)
     if data_exists:
