@@ -355,25 +355,6 @@ def check_alerts(df):
 
     return no2_alert, pm10_alert, no2_messages, pm10_messages
 
-def display_alerts_in_table(alert_messages):
-    # Vérifier si alert_messages est une liste
-    if isinstance(alert_messages, list):
-        # Convertir les messages d'alerte en liste de dictionnaires
-        alert_data = [{"Messages d'alerte": message} for message in alert_messages]
-
-        if alert_data:
-            # Convertir la liste de dictionnaires en DataFrame
-            df_alerts = pd.DataFrame(alert_data)
-
-            # Convertir le DataFrame en tableau HTML
-            html_table = df_alerts.to_html(escape=False, index=False)
-
-            # Afficher le tableau HTML dans Streamlit
-            st.write(df_alerts)
-        else:
-            st.write("Aucune alerte détectée.")
-    else:
-        st.write("Aucune alerte détectée.")
 
 
 def main():
@@ -491,15 +472,23 @@ def main():
         col3.metric("Maximum", f"{filtered_df['valeur'].max()} {filtered_df['unite'].unique()[0]}", txtMax)
 
         # Vérification des alertes
-        no2_alert, pm10_alert, no2_message, pm10_message = check_alerts(filtered_df)
-        # Affichage des alertes
-        if no2_alert:
-            st.error(no2_message)
-            display_alerts_in_table(no2_alert)
-        if pm10_alert:
-            st.error(pm10_message)
-            display_alerts_in_table(pm10_alert)
-        if not no2_alert and not pm10_alert:
+        no2_alert, pm10_alert, no2_messages, pm10_messages = check_alerts(filtered_df)
+
+        # Affichage des alertes dans un tableau Streamlit
+        if no2_alert or pm10_alert:
+            st.subheader("Alertes")
+            alert_data = []
+
+            if no2_alert:
+                for message in no2_messages:
+                    alert_data.append({"Polluant": "NO2", "Message": message})
+            if pm10_alert:
+                for message in pm10_messages:
+                    alert_data.append({"Polluant": "PM10", "Message": message})
+
+            alert_df = pd.DataFrame(alert_data)
+            st.dataframe(alert_df, width=1000)
+        else:
             st.info("Aucune alerte détectée.")
 
         sector_chart_emissions(quarter_df if quarter_df.empty else filtered_df)
