@@ -7,6 +7,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import os
 import plotly.express as px
 
 
@@ -356,9 +357,9 @@ def check_alerts(df):
         df = df.sort_values(by="datetime_debut")
 
         for city in df["nom_com"].unique():
-            city_df = df[df["nom_com"] == city]
-            city_df["valeur_NO2_3h"] = city_df[city_df["nom_poll"] == "NO2"]["valeur"].rolling(window=3).mean()
-            city_df["valeur_NO2_24h"] = city_df[city_df["nom_poll"] == "NO2"]["valeur"].rolling(window=24).mean()
+            city_df = df[df["nom_com"] == city].copy()
+            city_df.loc[city_df["nom_poll"] == "NO2", "valeur_NO2_3h"] = city_df[city_df["nom_poll"] == "NO2"]["valeur"].rolling(window=3).mean()
+            city_df.loc[city_df["nom_poll"] == "NO2", "valeur_NO2_24h"] = city_df[city_df["nom_poll"] == "NO2"]["valeur"].rolling(window=24).mean()
 
             if city_df["valeur_NO2_3h"].max() >= 400:
                 no2_alert = True
@@ -399,10 +400,19 @@ def main():
     data_exists = os.path.exists(result_file)
 
     if not data_exists:
+        left, right = st.columns(2)
+        with left:
+            start_date = st.date_input("Date de début", value=datetime.date(2021, 1, 1), max_value=datetime.date.today() - datetime.timedelta(days=90), format="YYYY-MM-DD")
+        with right:
+            end_date = st.date_input("Date de fin", max_value=datetime.date.today(), format="YYYY-MM-DD")
+        if (end_date.year - start_date.year) * 4 + (end_date.month - start_date.month) // 3 < 1:
+            st.error("Les dates sélectionnées doivent contenir au moins un trimestre.")
         if st.button("Télécharger et traiter les données"):
             with st.status("Téléchargement et traitement des données", expanded=True) as status:
                 st.write("Téléchargement des données..")
-                download("2021-01-01", "2024-03-31")
+                # Check if the selected dates have at least one quarter between them
+                download(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+                #download("2021-01-01", "2024-03-31")
                 st.write("Téléchargement des données SIRENE..")
                 # download_sirene_data()
                 st.write("Traitement des données..")
@@ -460,7 +470,7 @@ def main():
             st.divider()
 
             # Display the filtered DataFrame
-            st.write(filtered_df)
+            #st.write(filtered_df)
 
             # Calculate the previous quarter
             previous_quarter = selected_year_quarter.split("-")
@@ -535,6 +545,20 @@ def main():
         with st.container():
             st.map(filtered_df, size=1000, latitude="y_wgs84", longitude="x_wgs84")
             global_charts(selected_department, selected_city)
+
+        def delete_data():
+            # Delete the result file if it exists
+            result_file = "result.csv"
+            if os.path.exists(result_file):
+                os.remove(result_file)
+                print("Data deleted successfully")
+            
+            # Reload the page
+            st.rerun()
+
+        # Create a button to delete the data
+        if st.button("Delete Data"):
+            delete_data()
 
 if __name__ == "__main__":
     main()
