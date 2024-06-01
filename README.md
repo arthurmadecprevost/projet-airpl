@@ -22,3 +22,9 @@ cd projet-airpl
 ```
 streamlit run main.py
 ```
+
+## Informations complémentaires : 
+
+Attention, le téléchargement des données de AirPL et surtout du registre SIRENE peuvent prendre du temps. 
+
+Si besoin, merci de nous contacter pour récupérer les fichiers (AirPL, SIRENE) utilisés dans les traitements.
