@@ -64,6 +64,7 @@ def download(start_date, end_date):
 
 def download_sirene_data():
     # Send a GET request to download the SIRENE data
+
     response = requests.get("https://data.paysdelaloire.fr/api/explore/v2.1/catalog/datasets/120027016_base-sirene-v3-ss/exports/csv")
     # Check if the request was successful
     if response.status_code == 200:
@@ -414,7 +415,8 @@ def main():
                 download(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
                 #download("2021-01-01", "2024-03-31")
                 st.write("Téléchargement des données SIRENE..")
-                download_sirene_data()
+                if not os.path.exists("data/sirene_data.csv"):
+                    download_sirene_data()
                 st.write("Traitement des données..")
                 process()
                 st.write("Traitement des données SIRENE..")
