@@ -403,9 +403,9 @@ def main():
     if not data_exists:
         left, right = st.columns(2)
         with left:
-            start_date = st.date_input("Date de début", value=datetime.date(2021, 1, 1), max_value=datetime.date.today() - datetime.timedelta(days=90), format="YYYY-MM-DD")
+            start_date = st.date_input("Date de début", value=datetime.date(2023, 1, 1), max_value=datetime.date.today() - datetime.timedelta(days=90), format="YYYY-MM-DD")
         with right:
-            end_date = st.date_input("Date de fin", max_value=datetime.date.today(), format="YYYY-MM-DD")
+            end_date = st.date_input("Date de fin", value=datetime.date(2024, 3, 31), max_value=datetime.date.today(), format="YYYY-MM-DD")
         if (end_date.year - start_date.year) * 4 + (end_date.month - start_date.month) // 3 < 1:
             st.error("Les dates sélectionnées doivent contenir au moins un trimestre.")
         if st.button("Télécharger et traiter les données"):
