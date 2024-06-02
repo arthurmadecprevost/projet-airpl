@@ -35,4 +35,4 @@ Pour les utiliser :
 2. Renommer le fichier "result_preprocessed_Q22023-Q12024.csv" en "result.csv"
 3. Redémarrer l'application (streamlit run main.py)
 
-Si le téléchargement est trop long, merci de nous contacter pour récupérer les fichiers (AirPL, SIRENE) utilisés dans les traitements.
+Si vous rencontrez des problèmes (ex: téléchargement trop long), n'hésitez pas à nous contacter pour récupérer les fichiers (AirPL, SIRENE) utilisés dans les traitements.
