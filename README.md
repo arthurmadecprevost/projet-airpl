@@ -25,7 +25,7 @@ streamlit run main.py
 
 ## Informations complémentaires : 
 
-Attention, le téléchargement des données de AirPL et surtout du registre SIRENE peuvent prendre du temps. 
+Attention, le téléchargement des données de AirPL et surtout du registre SIRENE (1,7 Go) peuvent prendre du temps. 
 
 Si vous ne souhaitez pas attendre le téléchargement et le processing des données et seulement afficher les données déjà traitées, vous pouvez utiliser le dossier ./results_preprocessed_Q22023-Q12024 et le fichier result_preprocessed_Q22023-Q12024.csv qui contiennent des données AirPL déjà traitées du second trimestre 2023 au premier trimestre 2024. 
 
